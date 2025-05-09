@@ -2,6 +2,6 @@
 
 (embedded functionality coming soon)
 
-![image](https://github.com/user-attachments/assets/76be8f08-3af4-4768-b29e-847c0d226551)
+![image](https://github.com/user-attachments/assets/67f33ae8-e128-41a6-8519-cbdbfc046be8)
 <br />
 (much rotation, muy elegante)
