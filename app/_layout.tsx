@@ -1,75 +1,40 @@
-import { Canvas, useFrame } from "@react-three/fiber/native";
+import { Canvas } from "@react-three/fiber/native";
 import { StatusBar } from "expo-status-bar";
-import { useRef, useState } from "react";
-import { PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
-import "react-native-reanimated";
-import * as THREE from "three";
-import { RubiksCube } from "./RubiksCube";
-
-function FloatingCube({
-  dragVelocity,
-  resetSignal,
-}: {
-  dragVelocity: React.MutableRefObject<{ dx: number; dy: number }>;
-  resetSignal: React.MutableRefObject<boolean>;
-}) {
-  const meshRef = useRef<THREE.Mesh>(null!);
-  const rotation = useRef({ x: 0, y: 0 });
-
-  useFrame((_, delta) => {
-    // Handle reset
-    if (resetSignal.current) {
-      rotation.current = { x: 0, y: 0 };
-      resetSignal.current = false;
-    }
-
-    const currentX = rotation.current.x % (Math.PI * 2);
-    const isUpsideDown = currentX > Math.PI / 2 && currentX < (3 * Math.PI) / 2;
-
-    // Apply user drag + auto-rotation
-    rotation.current.x += dragVelocity.current.dy * 0.001;
-
-    if (isUpsideDown) {
-      rotation.current.y -= dragVelocity.current.dx * 0.001;
-    } else {
-      rotation.current.y += dragVelocity.current.dx * 0.001;
-    }
-
-    rotation.current.y += delta * 0.2;
-
-    if (meshRef.current) {
-      meshRef.current.rotation.x = rotation.current.x;
-      meshRef.current.rotation.y = rotation.current.y;
-    }
-
-    // Decay drag velocity
-    dragVelocity.current.dx *= 0.95;
-    dragVelocity.current.dy *= 0.95;
-  });
-
-  return (
-    <mesh ref={meshRef}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="hotpink" />
-    </mesh>
-  );
-}
+import React, { useRef, useState } from "react";
+import {
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { FaceControls, FaceName } from "./FaceControls";
+import { RotateCmd, RubiksCube } from "./RubiksCube";
 
 export default function RootLayout() {
   const dragVelocity = useRef({ dx: 0, dy: 0 });
-  const resetSignal = useRef(false);
-
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gesture) => {
-        dragVelocity.current.dx = gesture.vx * 100;
-        dragVelocity.current.dy = gesture.vy * 100;
+      onPanResponderMove: (_, g) => {
+        dragVelocity.current.dx = g.vx * 100;
+        dragVelocity.current.dy = g.vy * 100;
       },
     })
   ).current;
 
-  const [triggerFrontRotate, setTriggerFrontRotate] = useState(false);
+  const [rotateCmd, setRotateCmd]       = useState<RotateCmd>(null);
+  const [resetSpin, setResetSpin]       = useState(false);
+  const [resetState, setResetState]     = useState(false);
+
+  const triggerResetSpin = () => {
+    setResetSpin(true);
+    setTimeout(() => setResetSpin(false), 50);
+  };
+  const triggerResetState = () => {
+    setResetState(true);
+    setTimeout(() => setResetState(false), 50);
+  };
 
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
@@ -78,34 +43,37 @@ export default function RootLayout() {
         <ambientLight intensity={0.7} />
         <directionalLight position={[2, 2, 2]} intensity={1.5} />
         <RubiksCube
-          triggerFrontRotate={triggerFrontRotate}
           dragVelocity={dragVelocity}
+          rotateCmd={rotateCmd}
+          resetSpinSignal={resetSpin}
+          resetStateSignal={resetState}
         />
       </Canvas>
 
       <View style={styles.overlay}>
         <Text style={styles.title}>CubeLink</Text>
         <Text style={styles.subtitle}>Drag to influence the cube</Text>
-        <Pressable
-          style={styles.button}
-          onPress={() => {
-            dragVelocity.current = { dx: 0, dy: 0 };
-            resetSignal.current = true;
-          }}
-        >
-          <Text style={styles.buttonText}>Reset Spin</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.button, { marginTop: 12 }]}
-          onPress={() => {
-            setTriggerFrontRotate(true);
-            // reset after a brief moment so child effect can re-fire next time
-            setTimeout(() => setTriggerFrontRotate(false), 100);
-          }}
-        >
-          <Text style={styles.buttonText}>Rotate Front Face</Text>
-        </Pressable>
+
+        <View style={styles.inlineButtons}>
+          <Pressable style={styles.button} onPress={triggerResetSpin}>
+            <Text style={styles.buttonText}>Reset Spin</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.button, { marginLeft: 12 }]}
+            onPress={triggerResetState}
+          >
+            <Text style={styles.buttonText}>Reset State</Text>
+          </Pressable>
+        </View>
       </View>
+
+      <FaceControls
+        onRotate={(face: FaceName, dir) => {
+          setRotateCmd({ face, dir });
+          setTimeout(() => setRotateCmd(null), 100);
+        }}
+      />
 
       <StatusBar style="light" />
     </View>
@@ -133,12 +101,16 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: "#aaa",
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  inlineButtons: {
+    flexDirection: "row",
+    alignItems: "center",
   },
   button: {
     backgroundColor: "#512DA8",
     paddingVertical: 10,
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     borderRadius: 100,
   },
   buttonText: {
